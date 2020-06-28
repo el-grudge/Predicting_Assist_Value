@@ -1,11 +1,10 @@
+options(scipen=999)
 library(StatsBombR)
 library(dplyr)
 library(bnlearn)
-options(scipen=999)
 
 Comp <- FreeCompetitions()
-Matches <- FreeMatches(Comp)
-ALLMATCHES <- Matches
+ALLMATCHES <- FreeMatches(Comp)
 
 # find common columns
 col_counter <- data.frame(x=character(0), y=numeric(0), stringsAsFactors=FALSE)
@@ -80,39 +79,34 @@ for (i in c(1:length(ALLMATCHES$match_id))){
   xADataset_M$play_pattern.name <- as.factor(xADataset_M$play_pattern.name)
   xADataset_M$pass.height.name <- as.factor(xADataset_M$pass.height.name)
   xADataset_M$pass.body_part.name <- as.factor(xADataset_M$pass.body_part.name)
-  assistedShots <- FAWSLEvents[!is.na(FAWSLEvents$shot.outcome.name) & FAWSLEvents$shot.outcome.name=='Goal' & !is.na(FAWSLEvents$shot.key_pass_id),]
-  assists <- FAWSLEvents[FAWSLEvents$id %in% assistedShots$shot.key_pass_id,]
+  assistedShots <- event[!is.na(event$shot.outcome.name) & event$shot.outcome.name=='Goal' & !is.na(event$shot.key_pass_id),]
+  assists <- event[event$id %in% assistedShots$shot.key_pass_id,]
   xADataset_M$pass.outcome <- ifelse(xADataset_M$id %in% assists$id, 'Goal', 'No goal')
   ALLEvents <- rbind(ALLEvents, xADataset_M)
 }
-write.csv(ALLEvents, 'ALLEvents.csv')
+write.csv(ALLEvents, 'ALLEvents.csv', row.names = FALSE)
 
 #####################################################
-# algorithms
+# modelling
+ALLEvents <- read.csv('ALLEvents.csv')
+ALLEvents_HC <- ALLEvents[,c('xA','pass.length','pass.angle','start.X','start.Y','end.X','end.Y')]
+
 v_algorithms <- c(
-  "iamb.fdr","fast.iamb","inter.iamb","gs","iamb","hpc","si.hiton.pc","mmpc","pc.stable",
+  "iamb.fdr","fast.iamb",
   "hc","tabu",
-  "h2pc","mmhc","rsmax2",
+  "mmhc","rsmax2",
   "aracne","chow.liu"
 )
 
-# modeling
-ALLEvents_HC <- ALLEvents[,c('xA','pass.length','pass.angle','pass.height.name','start.X','start.Y','end.X','end.Y')]
-for (j in ncol(ALLEvents_HC)){
-  ALLEvents_HC[,j] <- factor(ALLEvents_HC[,j])
-}
 list_bnlearn <- list()
-# for(j in v_algorithms) try({
-#   list_bnlearn[[j]] <- do.call(
-#     what = j,
-#     args = list(x = ALLEvents_HC)
-#   )
-# },silent = TRUE)
-
+whitelist = data.frame(
+  from=colnames(ALLEvents_HC[-1]),
+  to=rep('xA', ncol(ALLEvents_HC)-1)
+)
 for(j in v_algorithms) try({
   list_bnlearn[[j]] <- do.call(
     what = j,
-    args = list(x = ALLEvents_HC)
+    args = list(x = ALLEvents_HC, whitelist = whitelist)
   )
   M_arcs <- arcs(list_bnlearn[[j]])
   for(l in 1:nrow(M_arcs)){
@@ -133,7 +127,7 @@ for(j in v_algorithms) try({
 
 ################################################################################################################################
 # scoring
-scores_M <- c('aic','bic','loglik','pred-loglik','bde','loglik-g','aic-g','bic-g','bge','loglik-cg','aic-cg','bic-cg','pred-loglik-cg')
+scores_M <- c('loglik-g','aic-g','bic-g')
 M_score <- matrix(
   data = NA,
   nrow = length(v_algorithms),
@@ -148,44 +142,82 @@ for(j in v_algorithms) for(k in scores_M) try({
     data = ALLEvents_HC,
     type = k
   )
-})
+},silent=TRUE)
 for(j in rownames(M_score)) M_score <- M_score[,order(M_score[j,])]
 for(j in colnames(M_score)) M_score <- M_score[order(M_score[,j]),]
-M_score
+View(M_score)
 
-M_score1 <- M_score[,colSums(is.na(M_score))<nrow(M_score)]
-M_score2 <- M_score1[rowSums(is.na(M_score1))<ncol(M_score1),]
-
-rownames(M_score2)[which(M_score2 == get(functional)(M_score2), arr.ind = TRUE)[1]]
-colnames(M_coef)[which(M_coef == get(functional)(M_coef), arr.ind = TRUE)[2]]
-
-
-M_score2 <- data.frame(M_score2)
-
-# h2pc, loglik-cg: -318897.1
-# mmhc, loglik-cg: -318897.1
-# rsmax2, loglik-cg: -318897.1
-# hc, loglik-cg: -318550.4
-# tabu, loglik-cg: -318543.7
+max(M_score)
+which.max(M_score)
 
 ################################################################################################################################
 # plot
 graphviz.plot(
-  list_bnlearn[['tabu']],
+  list_bnlearn[['hc']],
   shape='ellipse'
   )
 
+list_bnlearn_modified <- reverse.arc(
+  x = list_bnlearn[['hc']],
+  from = "xA",
+  to = "end.X",
+  check.cycles = FALSE
+)
+
+score(
+  x = list_bnlearn_modified,
+  data = ALLEvents_HC,
+  type = 'loglik-g'
+)
+
+graphviz.plot(
+  list_bnlearn_modified,
+  shape='ellipse'
+)
+
 ################################################################################################################################
 # predict
-fitted = bn.fit(list_bnlearn[['tabu']], ALLEvents_HC)
-pred = predict(
-  object=fitted,
+fitted_L <- list()
+predictions <- list()
+for (j in v_algorithms){
+  fitted_L[[j]] = bn.fit(list_bnlearn[[j]], ALLEvents_HC)
+  predictions[[j]] = predict(
+    object=fitted_L[[j]],
+    data=ALLEvents_HC[,-1],
+    node='xA'
+  )
+}
+
+fitted_L[['list_bnlearn_modified']] = bn.fit(list_bnlearn_modified, ALLEvents_HC)
+predictions[['list_bnlearn_modified']] = predict(
+  object=fitted_L[['list_bnlearn_modified']],
   data=ALLEvents_HC[,-1],
   node='xA'
-  )
-ALLEvents_HC[,-1]
+)
 
+# evaluate
+hc_MSE <- ModelMetrics::mse(predictions[['hc']],ALLEvents_HC[,'xA'])
+hc_Modified_MSE <- ModelMetrics::mse(predictions[['list_bnlearn_modified']],ALLEvents_HC[,'xA'])
 
+predictedXA <- data.frame(data.frame(ALLEvents[,c('id','player.name','xA',"pass.outcome")],predictions=predictions[['list_bnlearn_modified']]) %>%
+  group_by(player.name) %>%
+  summarise(totalAssists = n_distinct(id[pass.outcome=='Goal']),
+            totalXA = sum(xA),
+            totalPredicted = sum(predictions)
+  ) %>%
+  arrange(desc(totalAssists)))
+View(predictedXA)
+
+# arc strength
+arc.strength_xA <- arc.strength(
+  x = list_bnlearn_modified,
+  data = ALLEvents_HC
+)
+
+strength.plot(
+  x = list_bnlearn_modified,
+  strength = arc.strength_xA,
+  shape='ellipse'
+)
 
 ################################################################################################################################
-

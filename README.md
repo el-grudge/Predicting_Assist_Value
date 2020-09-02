@@ -14,9 +14,10 @@ In this analysis, we will be using statsbomb data to try and build a bayesian ne
 
 ## Phase 1 - Data Loading
 
-There are few points that I would like to highlight regarding the dataset. The original data does not have an xA value. It does have the xG value for all shots, however. So, to create an xA value, I selected all shots, and for each shot I found the player who assisted it, and assigned the xG value to this player's (playmaker) xA. In other words, if a shot has an xG value of 0.3 (30% chance of being converted into a goal), then it follows that the pass preceding this shot has a 30% chance of being turned into an assist. Another thing that is important to note is the fact that I have only included numeric variables, as not all algorithms are flexible enough to accommodate mixed categories, specifically local discovery algorithms, unless we change all values to discrete, which I find illogical given the nature of the xA value (the target variable). The final dataset looks like this:
+There are few points that I would like to highlight regarding the dataset. The original data does not have an xA value. It does have the xG value for all shots, however. So, to create an xA value, I selected all shots, and for each shot I found the player who assisted it, and assigned the xG value to this player's (playmaker) xA. In other words, if a shot has an xG value of 0.3 (30% chance of being converted into a goal), then it follows that the pass preceding this shot has a 30% chance of being turned into an assist. Another thing that is important to note is the fact that I have only included numeric variables, as not all algorithms are flexible enough to accommodate mixed categories, specifically local discovery algorithms, unless we change all values to discrete, which I find illogical given the nature of the xA value (the target variable). The final dataset looks like this:    
 
-![alt text](./dataset.png)
+![alt text](./dataset.png)  
+
 
 ## Phase 2 - Building the Bayesian Network Models
 
@@ -33,7 +34,7 @@ Also, I have whitelisted all arcs going to the target variable (xA), to ensure t
 
 As mentioned above, the data has numeric variables only, therefore I had to use relevant scoring criteria, namely AIC-G, BIC-G, and LOGLIK-G.
 
-The below table shows the different model scores:
+The below table shows the different model scores:  
 
 ![alt text](./scores.png)
 

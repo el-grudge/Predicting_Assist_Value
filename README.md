@@ -65,7 +65,7 @@ Modified HC = 0.01446407
 
 This justifies my decision to reverse the arc's direction.
 
-The below table shows the aggregated predicted xA per player compared to the aggregated true xA and the aggregated assiste total for the top 10 players:
+The below table shows the aggregated predicted xA per player compared to the aggregated true xA and the aggregated assist total for the top 10 players:
 
 ![alt text](./players.png)
 
